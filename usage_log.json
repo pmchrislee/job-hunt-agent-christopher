@@ -1,0 +1,24 @@
+[
+  {
+    "date": "2026-06-09T00:10:12.235Z",
+    "serpapi_queries": 2,
+    "searchapi_queries": 0,
+    "raw_listings_fetched": 328,
+    "raw_listings_sent_to_claude": 30,
+    "claude_input_tokens": 7952,
+    "claude_output_tokens": 1277,
+    "estimated_cost_usd": 0.05301100000000001,
+    "leads_added": 8
+  },
+  {
+    "date": "2026-06-09T00:17:41.646Z",
+    "serpapi_queries": 2,
+    "searchapi_queries": 0,
+    "raw_listings_fetched": 481,
+    "raw_listings_sent_to_claude": 30,
+    "claude_input_tokens": 7952,
+    "claude_output_tokens": 1174,
+    "estimated_cost_usd": 0.051466000000000005,
+    "leads_added": 10
+  }
+]

@@ -31,6 +31,7 @@ I transform Fortune 500 and venture-backed startup product teams into AI-powered
 - Founded EY's Americas Innovation Center as the first Product Manager, scaling the team
 - Launched ServiceNow HR portal for a pharmaceutical client serving 10,000 employees with 99% uptime
 - Developed proprietary product methodologies deployed across EY's global technology consulting practice
+- Drove client contract renewal rate through strategic product vision and execution excellence with a 110% utilization rate
 - Led Microsoft Azure practice product strategy for Fortune 500 digital transformations
 - Mentored consultants on product management, with most achieving promotions
 
@@ -47,6 +48,7 @@ I transform Fortune 500 and venture-backed startup product teams into AI-powered
 **Gear Stream, Inc. — Agile Product Management Coach & Facilitator** (2017)
 - Transformed delivery model at top US bank from project to product
 - Reduced release cycles from quarterly to bi-weekly
+- Facilitated executive alignment workshops
 
 **Fareportal — Product Manager** (2015 – 2016)
 - Delivered highest quarterly revenue with 30% YoY growth for Cars product
@@ -71,10 +73,13 @@ Product Management, Product Development, Microsoft Azure, AI/ML/GenAI, LLM Appli
 
 ## Certifications
 
-- Microsoft Certified: Azure AI Fundamentals
+- AWS Academy Graduate — Generative AI Foundations (Jun 2026)
+- Microsoft Certified: Azure AI Fundamentals (Dec 2024)
+- Certified LeSS Practitioner (Mar 2023)
 - Google Analytics Individual Qualification (IQ)
 - SAFe® 4.5 Certified Agilist
 - Certified Scrum Product Owner
+- Certified Scrum Master
 
 ---
 
