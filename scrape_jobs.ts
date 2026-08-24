@@ -45,21 +45,59 @@ const COST = {
   claude_output_per_tok: 15  / 1_000_000,
 };
 
-// ── Profile ───────────────────────────────────────────────────────────────────
-
-const PROFILE = {
-  roles:    ["Senior Software Engineer"],
-  locations: ["San Francisco Bay Area", "New York, NY"],
-  industry: "high tech",
-  minComp:  200_000,
-  keywords: ["engineer", "software", "AI", "ML", "platform", "backend", "fullstack"],
-};
-
 // ── File paths ────────────────────────────────────────────────────────────────
 
 const LEADS_FILE     = join(import.meta.dir, "job_leads.md");
 const USAGE_LOG_FILE = join(import.meta.dir, "usage_log.json");
 const SEEN_FILE      = join(import.meta.dir, "seen_jobs.json");
+const PROFILE_FILE   = join(import.meta.dir, "job_search_profile.md");
+const RESUME_FILE    = join(import.meta.dir, "resume.md");
+const SYSTEM_PROMPT_FILE = join(import.meta.dir, "agent_system_prompt.md");
+const OUTREACH_DIR   = join(import.meta.dir, "outreach");
+
+// ── Profile (read live from job_search_profile.md, never hardcoded) ────────────
+// Fixes a real bug: this used to be a hardcoded object that drifted out of sync
+// with job_search_profile.md (e.g. it kept "New York, NY" as a target location
+// after the profile dropped NYC). Reading the file live means this can't go
+// stale again — if you edit job_search_profile.md, the next run picks it up.
+
+function readFileOrThrow(path: string, label: string): string {
+  if (!existsSync(path)) throw new Error(`${label} not found at ${path}`);
+  return readFileSync(path, "utf-8");
+}
+
+const PROFILE_MD = readFileOrThrow(PROFILE_FILE, "job_search_profile.md");
+const RESUME_MD  = readFileOrThrow(RESUME_FILE, "resume.md");
+const SYSTEM_PROMPT_MD = existsSync(SYSTEM_PROMPT_FILE) ? readFileSync(SYSTEM_PROMPT_FILE, "utf-8") : "";
+
+function extractSection(md: string, heading: string): string[] {
+  const re = new RegExp(`^##\\s*${heading}\\s*$([\\s\\S]*?)(?=^##\\s|\\Z)`, "mi");
+  const match = md.match(re);
+  if (!match) return [];
+  return match[1]
+    .split("\n")
+    .map(l => l.replace(/^-\s*/, "").trim())
+    .filter(Boolean);
+}
+
+const PROFILE = {
+  roles:     extractSection(PROFILE_MD, "Target Roles"),
+  locations: extractSection(PROFILE_MD, "Target Locations"),
+  minComp:   200_000, // parsed below from the Compensation section; this is just the fallback
+  keywords:  ["engineer", "software", "AI", "ML", "platform", "backend", "fullstack"],
+};
+
+// Pull a rough numeric floor out of "## Compensation" (e.g. "$200,000+ base salary")
+const compMatch = PROFILE_MD.match(/##\s*Compensation\s*\n[-\s]*\$?([\d,]+)/i);
+if (compMatch) PROFILE.minComp = parseInt(compMatch[1].replace(/,/g, ""), 10);
+
+// SerpAPI/SearchAPI need a real geographic location string, not "Remote — anywhere in US".
+// Only pass through locations that look like an actual place for the Google Jobs query;
+// ATS fetching (fetchFromATS) is unaffected and will surface remote-tagged roles regardless.
+const GEO_SEARCH_LOCATIONS = PROFILE.locations.filter(l => !/^remote/i.test(l));
+
+if (PROFILE.roles.length === 0) throw new Error("No Target Roles found in job_search_profile.md");
+if (GEO_SEARCH_LOCATIONS.length === 0) console.warn("No geographic Target Locations found (only Remote?) — Google Jobs search will be skipped, relying on ATS fetch only.");
 
 const TABLE_HEADER = `| Source | Role | Company | Location | Link | MatchReason | Notes | OutreachStatus |
 |--------|------|---------|----------|------|-------------|-------|----------------|`;
@@ -345,11 +383,14 @@ async function scoreAndFormat(jobs: Job[]): Promise<string> {
     messages: [
       {
         role: "user",
-        content: `You are helping filter job leads for Christopher Lee. His profile:
-- Target roles: ${PROFILE.roles.join(", ")}
-- Min comp: $${PROFILE.minComp.toLocaleString()} total
-- Constraints: Series B or later, no visa sponsorship, full-time W-2
-- Background: AI/ML product & engineering, LLMs, RAG, enterprise SaaS, fintech, healthtech
+        content: `You are helping filter job leads for Christopher Lee.
+
+His full job search profile (job_search_profile.md):
+${PROFILE_MD}
+
+His actual resume (resume.md) — the ONLY source for claims about his real experience.
+Do not assume he has experience/titles beyond what's here:
+${RESUME_MD}
 
 Here are real job listings from Google Jobs and direct ATS sources:
 ${jobList}
@@ -366,7 +407,9 @@ Rules:
 - Notes: 2-3 sentences summarizing what the role involves, key requirements, and comp if known. Be specific.
 - OutreachStatus: New
 
-Skip any role that is clearly below $200k, requires sponsorship, or is seed/pre-Series B.
+Skip any role that clearly fails a Hard Constraint from the profile above (comp below
+$${PROFILE.minComp.toLocaleString()}, requires sponsorship, below Series B, not full-time W-2,
+location outside Target Locations).
 Return only the rows, no header, no fences. Each row MUST start and end with a pipe character: | field | field | ... |`,
       },
     ],
@@ -425,9 +468,113 @@ function appendLeads(newRows: string): number {
   return count;
 }
 
+// ── Outreach drafting (drafts ONLY — this never sends anything) ────────────────
+//
+// Per agent_system_prompt.md Rule 4 ("nothing sent automatically"), this function
+// only ever writes a draft file to outreach/. Sending requires a human in the
+// loop reading the draft and doing it themselves — that is intentionally not
+// something this script, or any cron job, can do.
+
+const DRAFTED_LOG_FILE = join(import.meta.dir, "outreach_drafted.json");
+
+function loadDraftedKeys(): Set<string> {
+  if (!existsSync(DRAFTED_LOG_FILE)) return new Set();
+  return new Set(JSON.parse(readFileSync(DRAFTED_LOG_FILE, "utf-8")) as string[]);
+}
+
+function saveDraftedKeys(keys: Set<string>) {
+  writeFileSync(DRAFTED_LOG_FILE, JSON.stringify([...keys], null, 2));
+}
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+async function draftOutreachForBestLead(): Promise<string | null> {
+  if (!existsSync(LEADS_FILE)) return null;
+  const leadsMd = readFileSync(LEADS_FILE, "utf-8");
+  const drafted = loadDraftedKeys();
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1000,
+    messages: [
+      {
+        role: "user",
+        content: `${SYSTEM_PROMPT_MD}
+
+Current job_search_profile.md:
+${PROFILE_MD}
+
+Current resume.md (the ONLY source for claims about his real experience — never invent or
+embellish an accomplishment, metric, or title that isn't here):
+${RESUME_MD}
+
+Current job_leads.md pipeline:
+${leadsMd}
+
+Leads already drafted this cycle (company|role — do not redraft these):
+${[...drafted].join("\n") || "(none yet)"}
+
+Task: from rows with OutreachStatus "New" or "Researching" that are NOT already drafted, pick
+the single strongest lead not yet drafted: clears the Compensation floor (by a real margin if
+Search Urgency is Passive, otherwise just needs to meet it), strongest company, best role match,
+per the standing rules above (flag conflicts like the Target Roles / resume title mismatch by
+grounding the draft honestly rather than fabricating a matching title — see how existing drafts
+in outreach/ handle this if any exist).
+
+If no undrafted lead clears the bar, respond with exactly: NONE
+
+Otherwise respond in exactly this format, nothing else:
+COMPANY: <company name>
+ROLE: <role title>
+SUBJECT: <email subject line>
+BODY:
+<email body, under 200 words, direct tone, no em dashes, clear ask for a short call>`,
+      },
+    ],
+  });
+
+  const inputTok  = response.usage.input_tokens;
+  const outputTok = response.usage.output_tokens;
+  usage.claude_input_tokens  += inputTok;
+  usage.claude_output_tokens += outputTok;
+  usage.estimated_cost_usd  += inputTok * COST.claude_input_per_tok + outputTok * COST.claude_output_per_tok;
+
+  const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
+  if (!text || text === "NONE") {
+    console.log("No new lead cleared the bar for outreach drafting this run.");
+    return null;
+  }
+
+  const company = text.match(/^COMPANY:\s*(.+)$/m)?.[1]?.trim();
+  const role    = text.match(/^ROLE:\s*(.+)$/m)?.[1]?.trim();
+  const subject = text.match(/^SUBJECT:\s*(.+)$/m)?.[1]?.trim();
+  const body    = text.match(/^BODY:\s*\n([\s\S]*)$/m)?.[1]?.trim();
+
+  if (!company || !role || !subject || !body) {
+    console.warn("Outreach draft response didn't match the expected format — skipping this run:\n" + text);
+    return null;
+  }
+
+  const key = `${company}|${role}`;
+  drafted.add(key);
+  saveDraftedKeys(drafted);
+
+  if (!existsSync(OUTREACH_DIR)) require("fs").mkdirSync(OUTREACH_DIR, { recursive: true });
+  const filename = `${slugify(company)}-${slugify(role)}-auto-${new Date().toISOString().slice(0, 10)}.md`;
+  const filepath = join(OUTREACH_DIR, filename);
+  writeFileSync(
+    filepath,
+    `**Subject:** ${subject}\n\n${body}\n\nChristopher Lee\npmchrislee@gmail.com | 347-410-6951 | linkedin.com/in/pmchrislee\n`
+  );
+  console.log(`✓ Drafted outreach for ${company} — ${role} → outreach/${filename} (DRAFT ONLY, not sent)`);
+  return filename;
+}
+
 // ── Email report ──────────────────────────────────────────────────────────────
 
-async function sendReport(leadsAdded: number) {
+async function sendReport(leadsAdded: number, draftFile: string | null) {
   const u = usage;
   const body = `
 Job Hunt Agent — Weekly Run Report
@@ -436,6 +583,9 @@ Date:                    ${new Date(u.date).toLocaleString("en-US", { timeZone: 
 
 LEADS
   New leads added:       ${leadsAdded}
+
+OUTREACH DRAFT (draft only — nothing was sent; review and send yourself)
+  ${draftFile ? `outreach/${draftFile}` : "None this run — no undrafted lead cleared the bar."}
 
 API USAGE
   SerpAPI queries:       ${u.serpapi_queries} / ${WEEKLY_QUERY_BUDGET} budget
@@ -484,7 +634,7 @@ async function main() {
 
   console.log("=== Google Jobs (SerpAPI / SearchAPI) ===");
   for (const role of PROFILE.roles) {
-    for (const location of PROFILE.locations) {
+    for (const location of GEO_SEARCH_LOCATIONS) {
       console.log(`Fetching: ${role} in ${location}...`);
       const jobs = await fetchGoogleJobs(role, location, queriesUsed);
       queriesUsed = usage.serpapi_queries + usage.searchapi_queries;
@@ -503,8 +653,11 @@ async function main() {
   const leadsAdded = rows ? appendLeads(rows) : 0;
   usage.leads_added = leadsAdded;
 
+  console.log("\n=== Outreach drafting (draft only, never sent) ===");
+  const draftFile = await draftOutreachForBestLead();
+
   saveUsageLog();
-  await sendReport(leadsAdded);
+  await sendReport(leadsAdded, draftFile);
 }
 
 main().catch(console.error);
