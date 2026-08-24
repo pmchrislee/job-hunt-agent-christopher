@@ -4,20 +4,23 @@
 - Senior Software Engineer
 
 ## Work Arrangement
-- Hybrid
+- Flexible — remote, hybrid, or onsite all acceptable if the role and comp fit
 
 ## Target Locations
-- San Francisco Bay Area (SF, South Bay, Peninsula, East Bay)
-- New York City metro
+- SF Bay Area (SF, South Bay, Peninsula, East Bay)
+- Remote — anywhere in US
 
 ## Industries & Companies
 - Tech consulting
+- Big Tech / large public tech companies
+- Growth-stage startups (Series B+)
+- Enterprise SaaS / B2B software
 
 ## Compensation
 - $200,000+ base salary
 
 ## Search Urgency
-- Passive — only surface exceptional, hard-to-ignore roles. Not actively applying broadly.
+- Actively searching — broader outreach and applications than a passive search, but still discreet (see Hard Constraints).
 
 ## Hard Constraints
 - US work-authorized — no visa sponsorship needed
