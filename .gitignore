@@ -1,2 +1,23 @@
-.env
+# Dependencies
 node_modules/
+
+# Secrets — API keys, tokens, credentials
+# Real values belong in a secrets manager or an untracked local file (e.g. .env),
+# never in code or tracked config. Only *.example/*.sample templates should be committed.
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*_key.json
+*_token.json
+credentials.json
+service-account*.json
+secrets/
+secrets.json
+secrets.yaml
+secrets.yml
+
+# OS
+.DS_Store
