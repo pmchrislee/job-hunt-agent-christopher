@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "scrape": "bun run scrape_jobs.ts",
+    "draft-cover-letters": "bun run draft_cover_letters.ts"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
     "nodemailer": "^8.0.10"
