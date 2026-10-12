@@ -93,8 +93,8 @@ const MIN_COMP = compMatch ? parseInt(compMatch[1].replace(/,/g, ""), 10) : 200_
 
 function qualifies(row: LeadRow): { ok: boolean; reason?: string } {
   const status = row.status.toLowerCase();
-  if (status !== "new" && status !== "researching") {
-    return { ok: false, reason: `status is "${row.status}", not New/Researching` };
+  if (!["new", "researching", "ready"].includes(status)) {
+    return { ok: false, reason: `status is "${row.status}", not New/Researching/Ready` };
   }
   // Defense in depth: job_leads.md's own research (Notes) sometimes already flags a comp
   // shortfall on a row that hasn't been re-triaged to Skip yet. Don't draft for those.

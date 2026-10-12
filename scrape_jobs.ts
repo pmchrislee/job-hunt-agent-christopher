@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { writeFileSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { TARGET_COMPANIES } from "./target_companies";
+import { extractSection } from "./profile_sections";
 
 // Explicitly load .env from the project directory regardless of cwd
 const envPath = join(import.meta.dir, ".env");
@@ -70,31 +71,31 @@ const PROFILE_MD = readFileOrThrow(PROFILE_FILE, "job_search_profile.md");
 const RESUME_MD  = readFileOrThrow(RESUME_FILE, "resume.md");
 const SYSTEM_PROMPT_MD = existsSync(SYSTEM_PROMPT_FILE) ? readFileSync(SYSTEM_PROMPT_FILE, "utf-8") : "";
 
-function extractSection(md: string, heading: string): string[] {
-  const re = new RegExp(`^##\\s*${heading}\\s*$([\\s\\S]*?)(?=^##\\s|\\Z)`, "mi");
-  const match = md.match(re);
-  if (!match) return [];
-  return match[1]
-    .split("\n")
-    .map(l => l.replace(/^-\s*/, "").trim())
-    .filter(Boolean);
-}
-
 const PROFILE = {
   roles:     extractSection(PROFILE_MD, "Target Roles"),
   locations: extractSection(PROFILE_MD, "Target Locations"),
   minComp:   200_000, // parsed below from the Compensation section; this is just the fallback
-  keywords:  ["engineer", "software", "AI", "ML", "platform", "backend", "fullstack"],
+  keywords:  [] as string[], // derived below from Target Roles; do not hardcode (see matchesProfile)
 };
+
+// Direct-ATS title filtering used to hardcode an engineering-specific keyword list
+// ("engineer", "software", "AI", "ML", ...) that silently returned zero matches for any
+// non-engineering Target Role (e.g. Product Manager). Derive keywords from Target Roles
+// itself so this can't drift out of sync again — the same fix already applied to locations.
+PROFILE.keywords = PROFILE.roles.map(r => r.toLowerCase());
 
 // Pull a rough numeric floor out of "## Compensation" (e.g. "$200,000+ base salary")
 const compMatch = PROFILE_MD.match(/##\s*Compensation\s*\n[-\s]*\$?([\d,]+)/i);
 if (compMatch) PROFILE.minComp = parseInt(compMatch[1].replace(/,/g, ""), 10);
 
-// SerpAPI/SearchAPI need a real geographic location string, not "Remote — anywhere in US".
-// Only pass through locations that look like an actual place for the Google Jobs query;
-// ATS fetching (fetchFromATS) is unaffected and will surface remote-tagged roles regardless.
-const GEO_SEARCH_LOCATIONS = PROFILE.locations.filter(l => !/^remote/i.test(l));
+// SerpAPI/SearchAPI need a real geographic location string, not "Remote — anywhere in US",
+// and not a parenthetical explainer either — "SF Bay Area (SF, South Bay, Peninsula, East
+// Bay)" verbatim gets rejected by both providers with "Unsupported location". Strip
+// parentheticals for the API call; ATS fetching (fetchFromATS) doesn't use this at all and
+// surfaces remote-tagged roles regardless.
+const GEO_SEARCH_LOCATIONS = PROFILE.locations
+  .filter(l => !/^remote/i.test(l))
+  .map(l => l.replace(/\([^)]*\)/g, "").trim());
 
 if (PROFILE.roles.length === 0) throw new Error("No Target Roles found in job_search_profile.md");
 if (GEO_SEARCH_LOCATIONS.length === 0) console.warn("No geographic Target Locations found (only Remote?) — Google Jobs search will be skipped, relying on ATS fetch only.");
@@ -191,6 +192,32 @@ function isAllowedBoard(via: string): boolean {
   return ALLOWED_BOARDS.some(b => v.includes(b));
 }
 
+// SerpAPI/SearchAPI's google_jobs engine only accepts their own canonicalized location
+// strings (e.g. "San Francisco Bay Area,California,United States") — free-text like
+// "SF Bay Area" or "San Francisco Bay Area, CA" gets rejected outright with a 400. Resolve
+// whatever's in job_search_profile.md against SerpAPI's free locations lookup instead of
+// hardcoding a canonical string here, so a future profile edit (new city, new region)
+// doesn't silently break the same way.
+const locationCache = new Map<string, string>();
+async function resolveLocation(raw: string): Promise<string> {
+  if (locationCache.has(raw)) return locationCache.get(raw)!;
+  try {
+    const res = await fetch(`https://serpapi.com/locations.json?q=${encodeURIComponent(raw)}&limit=1`);
+    if (res.ok) {
+      const results = await res.json() as { canonical_name?: string }[];
+      if (results[0]?.canonical_name) {
+        locationCache.set(raw, results[0].canonical_name);
+        return results[0].canonical_name;
+      }
+    }
+  } catch {
+    // fall through to raw string below
+  }
+  console.warn(`  Could not resolve "${raw}" to a canonical location — trying it as-is.`);
+  locationCache.set(raw, raw);
+  return raw;
+}
+
 async function fetchViaSerpAPI(role: string, location: string): Promise<Job[]> {
   const params = new URLSearchParams({
     engine: "google_jobs",
@@ -221,11 +248,13 @@ async function fetchViaSearchAPI(role: string, location: string): Promise<Job[]>
   return (data.jobs_results ?? []).map(normalizeSerpJob).filter(j => isAllowedBoard(j.via));
 }
 
-async function fetchGoogleJobs(role: string, location: string, queriesUsed: number): Promise<Job[]> {
+async function fetchGoogleJobs(role: string, rawLocation: string, queriesUsed: number): Promise<Job[]> {
   if (queriesUsed >= WEEKLY_QUERY_BUDGET) {
-    console.warn(`  Query budget (${WEEKLY_QUERY_BUDGET}) reached — skipping ${role} in ${location}`);
+    console.warn(`  Query budget (${WEEKLY_QUERY_BUDGET}) reached — skipping ${role} in ${rawLocation}`);
     return [];
   }
+  const location = await resolveLocation(rawLocation);
+  if (location !== rawLocation) console.log(`  Resolved "${rawLocation}" → "${location}"`);
   if (SERPAPI_KEY) {
     try {
       const jobs = await fetchViaSerpAPI(role, location);
@@ -259,7 +288,7 @@ interface LeverRawJob {
 
 function matchesProfile(title: string): boolean {
   const t = title.toLowerCase();
-  return PROFILE.keywords.some(k => t.includes(k.toLowerCase()));
+  return PROFILE.keywords.some(k => t.includes(k));
 }
 
 async function fetchFromGreenhouse(slug: string, company: string): Promise<Job[]> {
@@ -435,14 +464,24 @@ Return only the rows, no header, no fences. Each row MUST start and end with a p
 // ── Leads file management ─────────────────────────────────────────────────────
 
 function dedupeRows(existing: string, newRows: string): string {
-  const existingCompanies = new Set(
-    [...existing.matchAll(/\|\s*([^|]+?)\s*\|\s*New/g)].map(m => m[1].toLowerCase())
+  // Bug fix: this used to match `/\|\s*([^|]+?)\s*\|\s*New/` against the raw file text to
+  // pull "company" names, but with 8 columns (Source|Role|Company|Location|Link|MatchReason|
+  // Notes|OutreachStatus) that pattern actually captures whatever sits in the Notes column
+  // right before a "New" status — never the real Company field — so it silently deduped
+  // against garbage strings. Parse real rows and key on Company+Role instead.
+  const existingKeys = new Set(
+    existing.split("\n")
+      .filter(line => line.trim().startsWith("|") && !/^\|[-\s|]+\|$/.test(line.trim()))
+      .map(line => line.split("|").map(c => c.trim()))
+      .filter(cells => cells[1] !== "Source" && cells[3])
+      .map(cells => `${cells[3].toLowerCase()}|${cells[2].toLowerCase()}`) // Company|Role
   );
   return newRows
     .split("\n")
     .filter(row => {
-      const company = row.split("|")[3]?.trim().toLowerCase();
-      return company && !existingCompanies.has(company);
+      const cells = row.split("|").map(c => c.trim());
+      const key = cells[3] && `${cells[3].toLowerCase()}|${cells[2]?.toLowerCase()}`;
+      return key && !existingKeys.has(key);
     })
     .join("\n");
 }
