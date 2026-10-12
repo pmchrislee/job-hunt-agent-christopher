@@ -1,32 +1,71 @@
-# Job Hunt Agent — Christopher Lee
+# Job Hunt Agent
 
-An AI-powered agent to automate and accelerate my job search.
+A personal job hunt agent built on Bun, TypeScript, and the Claude API. It finds new job
+postings, filters them against a written profile, tracks them in a markdown pipeline, and
+drafts cover letters and outreach for review.
 
-## What It Does
+It never applies or sends outreach on its own. Everything it writes is a draft; submitting is a
+human step.
 
-- Researches job postings and matches them against my skills and experience
-- Drafts tailored cover letters and customizes my resume for each role
-- Tracks applications, follow-ups, and interview stages
-- Schedules outreach and reminds me of deadlines
-- Summarizes company research before interviews
+## How it works
 
-## Goals
+1. `job_search_profile.md` defines what to look for: target roles, locations, industries,
+   compensation floor, and hard constraints.
+2. `bun run scrape` searches job boards and company career pages, scores the results against
+   the profile and `resume.md`, and appends new leads to `job_leads.md`.
+3. `weekly_job_hunt_workflow.md` is the 12-step weekly procedure an agent (Claude Code) follows
+   to filter, research, qualify, and triage those leads.
+4. `bun run draft-cover-letters` drafts a cover letter for each qualifying lead into
+   `cover_letters/`.
 
-- Stay organized across multiple applications
-- Reduce time spent on repetitive writing tasks
-- Never miss a follow-up or deadline
-- Target roles that are the best fit
+## Key files
 
-## Stack
+| File | Purpose |
+|------|---------|
+| `job_search_profile.md` | Search criteria. Read fresh on every run. |
+| `weekly_job_hunt_workflow.md` | The weekly workflow: purpose, inputs, outputs, and actions for each step. |
+| `weekly_run_prompt.md` | The prompt to paste into Claude Code to start a weekly session. |
+| `job_leads.md` | The lead pipeline, one table row per lead with notes and status. |
+| `resume.md` | The only source for claims about experience. |
+| `cover_letter_prompt.md` | Guidelines for cover letter drafts. |
+| `agent_system_prompt.md` | Standing rules for the agent. |
+| `scrape_jobs.ts` | Lead search and scoring. |
+| `draft_cover_letters.ts` | Batch cover letter drafting. |
+| `SCHEDULE.md` | How to run the scraper on a weekly cron schedule. |
+| `CLAUDE.md` | Project guide for Claude Code. |
 
-- Claude API (claude-sonnet-4-6) for reasoning and generation
-- Bun for scripting and automation
-- Local file storage for application tracking
+## Setup
+
+Requires [Bun](https://bun.sh).
+
+```bash
+bun install
+cp .env.example .env
+```
+
+Fill in `.env`:
+
+| Variable | Needed for |
+|----------|------------|
+| `ANTHROPIC_API_KEY` | Scoring leads and drafting text |
+| `SERPAPI_KEY` or `SEARCHAPI_KEY` | Job search; at least one is required |
+| `GMAIL_APP_PASSWORD` | Optional; emails a run summary to the owner |
+
+`.env` is ignored by git. Never commit it.
 
 ## Usage
 
-_Setup and usage instructions go here as the project develops._
+```bash
+bun run scrape                          # find new leads and append them to job_leads.md
+bun run draft-cover-letters --dry-run   # list the leads that would get a cover letter
+bun run draft-cover-letters             # draft the cover letters
+bun test                                # run tests
+```
 
-## Status
+For a full weekly session, open the project in Claude Code and paste the block from
+`weekly_run_prompt.md`.
 
-Early setup — building out core agent capabilities.
+## Lead statuses
+
+`New` → `Researching` → `Ready` → `Applied` → `Interview` → `Offer`, with `Skip` for leads that
+fail the profile and `Stale` for applications with no response.
