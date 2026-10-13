@@ -21,3 +21,6 @@ secrets.yml
 
 # OS
 .DS_Store
+
+# Run logs
+*.log

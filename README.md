@@ -31,7 +31,9 @@ human step.
 | `agent_system_prompt.md` | Standing rules for the agent. |
 | `scrape_jobs.ts` | Lead search and scoring. |
 | `draft_cover_letters.ts` | Batch cover letter drafting. |
-| `SCHEDULE.md` | How to run the scraper on a weekly cron schedule. |
+| `daily_run.ts` | Daily run: scrape, draft cover letters, email the action digest. |
+| `daily_digest.ts` | Builds the daily email of actions to review. |
+| `SCHEDULE.md` | How to schedule the daily or weekly run with cron. |
 | `CLAUDE.md` | Project guide for Claude Code. |
 
 ## Setup
@@ -49,7 +51,7 @@ Fill in `.env`:
 |----------|------------|
 | `ANTHROPIC_API_KEY` | Scoring leads and drafting text |
 | `SERPAPI_KEY` or `SEARCHAPI_KEY` | Job search; at least one is required |
-| `GMAIL_APP_PASSWORD` | Optional; emails a run summary to the owner |
+| `GMAIL_APP_PASSWORD` | Emailing the daily digest and run summary to the owner; without it they only print |
 
 `.env` is ignored by git. Never commit it.
 
@@ -59,6 +61,8 @@ Fill in `.env`:
 bun run scrape                          # find new leads and append them to job_leads.md
 bun run draft-cover-letters --dry-run   # list the leads that would get a cover letter
 bun run draft-cover-letters             # draft the cover letters
+bun run daily                           # scrape, draft, and email the daily action digest
+bun run digest --dry-run                # print today's digest without sending
 bun test                                # run tests
 ```
 

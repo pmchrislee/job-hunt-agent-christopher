@@ -63,3 +63,55 @@ crontab -e
 ```
 
 Delete the line, save, and exit.
+
+---
+
+# Scheduling the daily run
+
+`daily_run.ts` runs `scrape_jobs.ts`, then `draft_cover_letters.ts`, then emails the action
+digest from `daily_digest.ts`. It prepares applications and lists them for review. **It never
+submits an application or sends outreach** (see `agent_system_prompt.md` Rule 4).
+
+## Before scheduling it
+
+- `ANTHROPIC_API_KEY` in `.env` must be a working key, or the scrape and drafting steps fail.
+  The digest still goes out and reports the failure.
+- `GMAIL_APP_PASSWORD` in `.env` must be set, or the digest is printed to the log only.
+- Check with `bun run daily --dry-run` (prints the digest; no scrape, no drafting, no email).
+
+## Cost of running daily
+
+Each run uses up to `WEEKLY_QUERY_BUDGET` (4) search queries, so a daily schedule uses up to
+about 120 a month, plus one Claude call to score leads and one per cover letter drafted.
+Check that against your SerpAPI or SearchAPI plan. Do not also install the weekly cron line above, or the scraper runs twice on Mondays.
+
+## Installed schedule (every day at 5:00 AM)
+
+The daily run is installed as a macOS LaunchAgent, not a crontab entry. cron skips a job
+when the Mac is asleep at the scheduled time; launchd runs it once the Mac next wakes.
+
+- Job file: `~/Library/LaunchAgents/com.pmchrislee.job-hunt-daily.plist`
+- Log: `daily.log` in this folder (ignored by git)
+- If the Anthropic key is rejected, the run skips the scrape and drafting, so no search
+  queries are spent, and the digest reports the problem.
+
+Check it:
+
+```bash
+launchctl print gui/$(id -u)/com.pmchrislee.job-hunt-daily
+```
+
+Run it now:
+
+```bash
+launchctl kickstart gui/$(id -u)/com.pmchrislee.job-hunt-daily
+```
+
+Turn it off:
+
+```bash
+launchctl bootout gui/$(id -u)/com.pmchrislee.job-hunt-daily
+```
+
+To change the time, edit `Hour` and `Minute` in the job file, then turn it off and load it
+again with `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.pmchrislee.job-hunt-daily.plist`.

@@ -31,5 +31,16 @@
     "claude_output_tokens": 1575,
     "estimated_cost_usd": 0.07664,
     "leads_added": 10
+  },
+  {
+    "date": "2026-10-13T00:19:01.536Z",
+    "serpapi_queries": 2,
+    "searchapi_queries": 0,
+    "raw_listings_fetched": 177,
+    "raw_listings_sent_to_claude": 30,
+    "claude_input_tokens": 18466,
+    "claude_output_tokens": 1457,
+    "estimated_cost_usd": 0.087253,
+    "leads_added": 2
   }
 ]
