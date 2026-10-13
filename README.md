@@ -33,6 +33,7 @@ human step.
 | `draft_cover_letters.ts` | Batch cover letter drafting. |
 | `daily_run.ts` | Daily run: scrape, draft cover letters, email the action digest. |
 | `daily_digest.ts` | Builds the daily email of actions to review. |
+| `resume_review.ts` | Suggests resume changes based on the open leads. Never edits the resume. |
 | `SCHEDULE.md` | How to schedule the daily or weekly run with cron. |
 | `CLAUDE.md` | Project guide for Claude Code. |
 

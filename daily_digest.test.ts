@@ -85,6 +85,13 @@ describe("buildDigest", () => {
     expect(d.text).toContain("401 invalid x-api-key");
   });
 
+  it("includes resume suggestions only when there are some", () => {
+    expect(buildDigest(leads, opts()).text).not.toContain("6. RESUME");
+    const d = buildDigest(leads, opts({ resumeSuggestions: ["Add a Projects section. Why: 5 of 7 leads."] }));
+    expect(d.text).toContain("6. RESUME: suggested changes based on your open leads (1)");
+    expect(d.text).toContain("1. Add a Projects section. Why: 5 of 7 leads.");
+  });
+
   it("counts actions in the subject", () => {
     expect(buildDigest(leads, opts()).subject).toBe("Job hunt: 4 actions to review, 2026-10-12");
   });

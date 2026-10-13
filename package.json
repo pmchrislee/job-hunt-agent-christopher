@@ -4,6 +4,7 @@
     "draft-cover-letters": "bun run draft_cover_letters.ts",
     "daily": "bun run daily_run.ts",
     "digest": "bun run daily_digest.ts",
+    "resume-review": "bun run resume_review.ts",
     "health-server": "bun run health_server.ts",
     "test": "bun test"
   },

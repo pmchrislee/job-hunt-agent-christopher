@@ -141,7 +141,8 @@ Do not filter on Work Arrangement unless the profile restricts it.
 **Inputs:** Rows marked `New` or `Researching`, criteria from step 1, `resume.md`, the live
 posting at each row's Link
 
-**Outputs:** Each such row set to `Ready` or `Skip`, with findings in Notes.
+**Outputs:** Each such row set to `Ready` or `Skip`, with findings in Notes; an updated
+`resume_suggestions.md`.
 
 **Actions:** For each row:
 1. Open the Link. If the posting is closed or gone, set `Skip` with `Skip <date>: posting
@@ -156,6 +157,10 @@ posting at each row's Link
    experience on `resume.md`.
 6. If any check fails, set `Skip` with the reason. If all pass, set `Ready` and append
    `Verified <date>`.
+7. After all rows are done, run `bun run resume-review`. It compares `resume.md` with the open
+   leads and writes suggested changes to `resume_suggestions.md`. Never edit `resume.md` from
+   those suggestions without Christopher's say-so, and never add experience he has not
+   confirmed.
 
 ## Step 9: Draft cover letters
 
@@ -222,6 +227,7 @@ recorded
 - Cover letters drafted: N
 - Applications submitted: N
 - Follow-ups drafted: N
+- Resume suggestions: the items from `resume_suggestions.md`, most important first
 - Active Priorities: list by company and role
 - Profile and resume conflict from step 2, and how it was resolved
 - Anything blocked or waiting on Christopher, one line each

@@ -25,8 +25,9 @@ This repo is an AI-powered job hunt agent for Christopher Lee. It automates job 
 | `scrape_jobs.ts` | Bun script that queries Claude to surface new job leads and appends them to `job_leads.md` |
 | `draft_cover_letters.ts` | Bun script that drafts a cover letter for each `New`, `Researching`, or `Ready` lead using `resume.md` and `cover_letter_prompt.md` |
 | `cover_letters/` | Generated cover letters saved as `[company]-[role].md` |
-| `daily_run.ts` | Daily run: scrape, draft cover letters, then email the action digest. Prepares applications for review; never submits one |
+| `daily_run.ts` | Daily run: scrape, draft cover letters, review the resume, then email the action digest. Prepares applications for review; never submits one |
 | `daily_digest.ts` | Builds and emails the daily list of actions to review (apply, review, outreach, follow up, stale). `--dry-run` prints without sending |
+| `resume_review.ts` | Compares `resume.md` with the open leads and writes suggested changes to `resume_suggestions.md` (ignored by git). Suggestions only; it never edits the resume. Skips the Claude call when the resume and leads are unchanged |
 
 ### `job_leads.md` schema
 Columns: `Source | Role | Company | Location | Link | MatchReason | Notes | OutreachStatus`.
@@ -45,5 +46,10 @@ bun run scrape                  # Search for new leads and append to job_leads.m
 bun run draft-cover-letters     # Draft cover letters into cover_letters/
 bun run daily                   # Scrape, draft, and email the daily action digest
 bun run digest --dry-run        # Print today's digest without sending
+bun run resume-review           # Suggest resume changes based on the open leads
 bun test                        # Run tests
 ```
+
+## Resume suggestions
+
+Whenever leads are added or reviewed, compare `resume.md` with what the open leads ask for and tell Christopher what to change, without being asked. Suggest only; change `resume.md` when he says to, and never add experience, tools, or metrics he has not confirmed.

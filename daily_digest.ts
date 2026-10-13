@@ -3,7 +3,8 @@
  *
  * Reads job_leads.md and builds one email listing what needs Christopher's decision today:
  * applications that are prepared and waiting for him to submit, new leads to qualify,
- * outreach drafts to send or discard, and follow-ups that are due. It submits nothing and
+ * outreach drafts to send or discard, follow-ups that are due, and resume changes suggested
+ * by resume_review.ts. It submits nothing and
  * contacts no one but Christopher himself. Per agent_system_prompt.md Rule 4, submitting an
  * application stays a human action — this only queues the work up for review.
  *
@@ -41,6 +42,7 @@ export interface DigestOptions {
   hasCoverLetter: (filename: string) => boolean;
   limit?: number;
   steps?: StepResult[];
+  resumeSuggestions?: string[];
 }
 
 export interface Digest {
@@ -150,6 +152,12 @@ export function buildDigest(leads: Lead[], opts: DigestOptions): Digest {
     `  [ ] ${line(a.lead)} (applied ${a.date}, ${a.age} days ago)`
   ), stale.length, "Nothing stale.");
 
+  const resume = opts.resumeSuggestions ?? [];
+  if (resume.length) {
+    out.push("", `6. RESUME: suggested changes based on your open leads (${resume.length})`, "-".repeat(60));
+    out.push(...resume.map((r, i) => `  ${i + 1}. ${r}`), "  Full list: resume_suggestions.md. resume.md has not been changed.");
+  }
+
   if (offProfile.length) {
     out.push("", `NOTE: ${offProfile.length} open lead(s) no longer match Target Roles (${opts.targetRoles.join(", ")}) and are left out above.`);
   }
@@ -190,6 +198,7 @@ export async function runDigest(args: { dryRun: boolean; limit?: number; steps?:
   loadEnv();
   const dir = import.meta.dir;
   const leads = parseLeads(readFileSync(join(dir, "job_leads.md"), "utf-8"));
+  const suggestionsPath = join(dir, "resume_suggestions.md");
   const targetRoles = extractSection(readFileSync(join(dir, "job_search_profile.md"), "utf-8"), "Target Roles");
   const digest = buildDigest(leads, {
     today: localToday(),
@@ -197,6 +206,9 @@ export async function runDigest(args: { dryRun: boolean; limit?: number; steps?:
     hasCoverLetter: f => existsSync(join(dir, "cover_letters", f)),
     limit: args.limit,
     steps: args.steps,
+    resumeSuggestions: existsSync(suggestionsPath)
+      ? readFileSync(suggestionsPath, "utf-8").split("\n").filter(l => /^\d+\.\s/.test(l)).map(l => l.replace(/^\d+\.\s*/, "").trim())
+      : [],
   });
 
   console.log(`Subject: ${digest.subject}\n\n${digest.text}`);

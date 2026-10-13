@@ -4,7 +4,8 @@
  * Runs the existing one-shot scripts in order, then emails the action digest:
  *   1. scrape_jobs.ts         find new leads, append to job_leads.md
  *   2. draft_cover_letters.ts draft cover letters for qualifying leads
- *   3. daily_digest.ts        email Christopher the list of actions to review
+ *   3. resume_review.ts       suggest resume changes based on the open leads
+ *   4. daily_digest.ts        email Christopher the list of actions to review
  *
  * A failed step does not stop the run: the digest still goes out and reports the failure,
  * so a broken API key shows up in the inbox instead of in an unread log. If the Anthropic
@@ -62,6 +63,7 @@ if (!DRY_RUN) {
   } else {
     steps.push(runStep("Scrape new leads", "scrape_jobs.ts"));
     steps.push(runStep("Draft cover letters", "draft_cover_letters.ts"));
+    steps.push(runStep("Review resume against leads", "resume_review.ts"));
   }
 }
 
